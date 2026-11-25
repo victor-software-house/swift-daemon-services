@@ -1,0 +1,43 @@
+# Two small apps that prove one app can sign with a Secure Enclave key another app created.
+# The signing team is never written here: pass DEVELOPMENT_TEAM to xcodebuild, as Probe/README.md says.
+name: Probe
+options:
+  deploymentTarget:
+    macOS: "27.0"
+packages:
+  SwiftDaemonServices:
+    path: ..
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    ARCHS: arm64
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_ENTITLEMENTS: Probe.entitlements
+    ENABLE_HARDENED_RUNTIME: YES
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_LSUIElement: YES
+targets:
+  ProbeMaker:
+    type: application
+    platform: macOS
+    sources:
+      - Maker
+      - Shared
+    dependencies:
+      - package: SwiftDaemonServices
+        product: KeychainIdentity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.victor-software-house.swift-daemon-services.probe.maker
+  ProbeSigner:
+    type: application
+    platform: macOS
+    sources:
+      - Signer
+      - Shared
+    dependencies:
+      - package: SwiftDaemonServices
+        product: KeychainIdentity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.victor-software-house.swift-daemon-services.probe.signer
