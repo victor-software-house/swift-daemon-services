@@ -61,7 +61,8 @@ Facts read on 2026-11-25:
    That is all macOS needs to form a `SecIdentity` with the key.
 3. The whole chain, leaf first, is one generic-password item of the data-protection keychain in the same group.
    - Its service is `<group suffix>.chain`, and its account is the identity's name.
-   - Its accessibility is the key's.
+   - Its value is a PEM bundle: the PEM block of each certificate, leaf first, one after another.
+   - The key, the leaf item and the chain item are all usable after the first unlock, on this device only.
    - No intermediate is a certificate item, so two identities that share an intermediate never collide.
 4. A store replaces the previous leaf and chain in these steps:
    - It adds the new leaf.

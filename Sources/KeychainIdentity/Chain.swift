@@ -88,6 +88,34 @@ enum Chain {
     }
 }
 
+// How the keychain protects each item of an identity: usable after the first unlock, on this Mac only.
+// The key, the leaf and the chain all use it, so a daemon reads them while the Mac is locked.
+enum Protection {
+    static var afterFirstUnlock: CFString {
+        kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    }
+}
+
+// The stored form of a chain: the PEM blocks of the certificates, leaf first, one after another.
+enum ChainBundle {
+    static let discriminator = "CERTIFICATE"
+
+    static func encode(_ chain: [Data]) -> Data {
+        let text = chain.map { PEMDocument(type: discriminator, derBytes: Array($0)).pemString + "\n" }
+        return Data(text.joined().utf8)
+    }
+
+    static func decode(_ data: Data) throws -> [Data] {
+        guard
+            let documents = try? PEMDocument.parseMultiple(pemString: String(decoding: data, as: UTF8.self)),
+            documents.allSatisfy({ $0.discriminator == discriminator })
+        else {
+            throw KeychainIdentityError.keychain(errSecDecode)
+        }
+        return documents.map { Data($0.derBytes) }
+    }
+}
+
 // An identity's items in the data-protection keychain.
 // The leaf is a certificate item labelled with the identity's name.
 // A generic password item of the service and the name keeps the chain.
@@ -138,10 +166,24 @@ struct KeychainChainItems: ChainItems {
         }
     }
 
-    func addLeaf(_ der: Data) throws -> Bool {
+    // The attributes of the leaf item that a store adds.
+    func leafAttributes(_ certificate: SecCertificate) -> [String: Any] {
         var attributes = leafQuery
-        attributes[kSecValueRef as String] = try Self.certificate(der)
-        let status = SecItemAdd(attributes as CFDictionary, nil)
+        attributes[kSecValueRef as String] = certificate
+        attributes[kSecAttrAccessible as String] = Protection.afterFirstUnlock
+        return attributes
+    }
+
+    // The attributes of the chain item that a store adds.
+    func chainAttributes(_ bundle: Data) -> [String: Any] {
+        var attributes = chainQuery
+        attributes[kSecValueData as String] = bundle
+        attributes[kSecAttrAccessible as String] = Protection.afterFirstUnlock
+        return attributes
+    }
+
+    func addLeaf(_ der: Data) throws -> Bool {
+        let status = SecItemAdd(leafAttributes(try Self.certificate(der)) as CFDictionary, nil)
         if status == errSecSuccess {
             return true
         }
@@ -172,20 +214,17 @@ struct KeychainChainItems: ChainItems {
         guard status == errSecSuccess else {
             throw KeychainIdentityError.mapped(status)
         }
-        guard let data = result as? Data, let chain = try? JSONDecoder().decode([Data].self, from: data) else {
+        guard let data = result as? Data else {
             throw KeychainIdentityError.keychain(errSecDecode)
         }
-        return chain
+        return try ChainBundle.decode(data)
     }
 
     func writeChain(_ chain: [Data]) throws {
-        let data = try JSONEncoder().encode(chain)
-        var status = SecItemUpdate(chainQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        let bundle = ChainBundle.encode(chain)
+        var status = SecItemUpdate(chainQuery as CFDictionary, [kSecValueData as String: bundle] as CFDictionary)
         if status == errSecItemNotFound {
-            var attributes = chainQuery
-            attributes[kSecValueData as String] = data
-            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            status = SecItemAdd(attributes as CFDictionary, nil)
+            status = SecItemAdd(chainAttributes(bundle) as CFDictionary, nil)
         }
         guard status == errSecSuccess else {
             throw KeychainIdentityError.mapped(status)

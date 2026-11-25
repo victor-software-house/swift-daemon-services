@@ -49,30 +49,7 @@ public struct IdentityStore: Sendable {
             throw KeychainIdentityError.alreadyExists(name: name)
         }
         var error: Unmanaged<CFError>?
-        guard
-            let access = SecAccessControlCreateWithFlags(
-                nil,
-                kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-                .privateKeyUsage,
-                &error
-            )
-        else {
-            throw KeychainIdentityError.mapped(error, fallback: errSecParam)
-        }
-        let privateKeyAttributes: [String: Any] = [
-            kSecAttrIsPermanent as String: true,
-            kSecAttrApplicationTag as String: Data(name.utf8),
-            kSecAttrLabel as String: name,
-            kSecAttrAccessControl as String: access,
-            kSecAttrAccessGroup as String: accessGroup,
-        ]
-        let attributes: [String: Any] = [
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-            kSecAttrKeySizeInBits as String: 256,
-            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
-            kSecUseDataProtectionKeychain as String: true,
-            kSecPrivateKeyAttrs as String: privateKeyAttributes,
-        ]
+        let attributes = Self.keyAttributes(name: name, accessGroup: accessGroup, access: try Self.keyAccessControl())
         guard let key = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
             let mapped = KeychainIdentityError.mapped(error, fallback: errSecInternalComponent)
             throw mapped == .keychain(errSecDuplicateItem) ? KeychainIdentityError.alreadyExists(name: name) : mapped
@@ -185,6 +162,35 @@ public struct IdentityStore: Sendable {
             der: Data(serializer.serializedBytes),
             pem: try request.serializeAsPEM().pemString
         )
+    }
+
+    // No user presence, usable after the first unlock, and never migrated to another Mac.
+    static func keyAccessControl() throws -> SecAccessControl {
+        var error: Unmanaged<CFError>?
+        guard
+            let access = SecAccessControlCreateWithFlags(nil, Protection.afterFirstUnlock, .privateKeyUsage, &error)
+        else {
+            throw KeychainIdentityError.mapped(error, fallback: errSecParam)
+        }
+        return access
+    }
+
+    // The attributes that make a Secure Enclave key of the group.
+    static func keyAttributes(name: String, accessGroup: String, access: SecAccessControl) -> [String: Any] {
+        let privateKeyAttributes: [String: Any] = [
+            kSecAttrIsPermanent as String: true,
+            kSecAttrApplicationTag as String: Data(name.utf8),
+            kSecAttrLabel as String: name,
+            kSecAttrAccessControl as String: access,
+            kSecAttrAccessGroup as String: accessGroup,
+        ]
+        return [
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeySizeInBits as String: 256,
+            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+            kSecUseDataProtectionKeychain as String: true,
+            kSecPrivateKeyAttrs as String: privateKeyAttributes,
+        ]
     }
 
     private func chainItems(named name: String) -> KeychainChainItems {
