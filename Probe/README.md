@@ -13,7 +13,11 @@ Use a Mac with a development profile.
 
 1. `ProbeMaker` removes the identity `probe` if an earlier run left one.
    It creates the identity again and writes its public key to the file that `PROBE_PUBLIC_KEY` names.
-2. `ProbeSigner` reads `probe` and signs 200 messages with it.
+   It builds a signing request and issues a leaf from a throwaway authority that it makes in memory.
+   It stores the chain, so that macOS forms a `SecIdentity`.
+2. `ProbeSigner` reads `probe`.
+   It logs the length of the chain and whether a `SecIdentity` is present.
+   Then it signs 200 messages with the key.
    It checks every signature with the public key the other app wrote.
    It logs the median, the 95th percentile and the maximum time of one signature, in milliseconds.
 3. Both apps write progress to the file that `PROBE_LOG` names.
@@ -71,5 +75,6 @@ Use a Mac with a development profile.
    ```
 
 4. Read the log of the signer.
-   The line that starts with `signed 200 messages, all verified` has the result.
-   Add it, with the date, to the note of task 4.1 in `openspec/changes/keychain-identity/tasks.md`.
+   The line that starts with `chain length` shows the chain and the `SecIdentity`.
+   The line that starts with `signed 200 messages, all verified` shows the timing.
+   Add both, with the date, to the note of task 4.1 in `openspec/changes/keychain-identity/tasks.md`.

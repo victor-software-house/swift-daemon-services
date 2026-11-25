@@ -16,6 +16,8 @@ enum ProbeSigner {
             guard let identity = try store.identity(named: ProbeConstants.identityName) else {
                 throw ProbeError(description: "no identity named \(ProbeConstants.identityName)")
             }
+            let secIdentity = identity.secIdentity == nil ? "missing" : "present"
+            log.write("chain length \(identity.chain.count), SecIdentity \(secIdentity)")
             let encoded = try String(contentsOfFile: probePublicKeyPath(), encoding: .utf8)
             guard let keyData = Data(base64Encoded: encoded.trimmingCharacters(in: .whitespacesAndNewlines)) else {
                 throw ProbeError(description: "the public key file is not base64")
