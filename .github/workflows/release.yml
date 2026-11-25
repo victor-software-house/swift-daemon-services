@@ -3,10 +3,15 @@ name: Release
 # Every push to the default branch runs verctl's release workflow.
 # It releases the version commit of a merged Version PR on GitHub (publisher none).
 # It also opens or updates the Version PR.
+#
+# A pull request and the merge queue run only the plan.
+# A release setup that cannot plan then never reaches the default branch.
 # Jobs of this repository's own go below the verctl job.
 on:
   push:
     branches: [main]
+  pull_request:
+  merge_group:
   workflow_dispatch:
 
 permissions: {}
@@ -20,9 +25,11 @@ env:
   # The CI profile; local work loads dev from .miserc.toml, which CI never does.
   MISE_ENV: ci
 
+# Releases on the default branch run one at a time.
+# A newer plan of the same pull request or merge group cancels an older one.
 concurrency:
-  group: release
-  cancel-in-progress: false
+  group: release-${{ github.event_name == 'push' && 'publish' || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   verctl:

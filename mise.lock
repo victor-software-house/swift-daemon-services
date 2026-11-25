@@ -70,6 +70,23 @@ url = "https://github.com/victor-software-house/hakkiri/releases/download/v0.1.2
 url_api = "https://api.github.com/repos/victor-software-house/hakkiri/releases/assets/765084899"
 provenance = "github-attestations"
 
+[[tools."github:victor-software-house/verctl"]]
+version = "0.8.5"
+backend = "github:victor-software-house/verctl"
+specifiers = ["0.8.5"]
+
+[tools."github:victor-software-house/verctl"."platforms.linux-x64"]
+checksum = "sha256:15889c56c6d1ea396efa6b2fff2de2b8af017ab0b2ac22f5a2f2adbab53b520c"
+checksum_source = "mise-versions"
+url = "https://github.com/victor-software-house/verctl/releases/download/v0.8.5/verctl_0.8.5_linux_x64.tar.gz"
+url_api = "https://api.github.com/repos/victor-software-house/verctl/releases/assets/742661704"
+
+[tools."github:victor-software-house/verctl"."platforms.macos-arm64"]
+checksum = "sha256:3055c6148775dbb31188b27fae3db1261cbf21978abfab1ad166816cbd4aaf1d"
+checksum_source = "mise-versions"
+url = "https://github.com/victor-software-house/verctl/releases/download/v0.8.5/verctl_0.8.5_macos_arm64.tar.gz"
+url_api = "https://api.github.com/repos/victor-software-house/verctl/releases/assets/742662167"
+
 [[tools.python]]
 version = "3.15.2"
 backend = "core:python"
