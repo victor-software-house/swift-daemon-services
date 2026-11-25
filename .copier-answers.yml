@@ -1,0 +1,27 @@
+# Changes here will be overwritten by Copier; edit with `copier update --data`.
+_commit: v0.0.144
+_src_path: https://github.com/victor-software-house/templates.git
+build_os: macos
+default_branch: main
+generated_paths: []
+github_owner: victor-software-house
+layer: whole
+linux_image: ubuntu-26.04
+macos_image: macos-27
+merge_queue_cancel_lower: true
+pieces:
+- hooks
+- lint_markdown
+- lint_toml
+- lint_typos
+- lint_shell
+- lint_prose
+- openspec
+- drift_check
+pieces_extra: []
+platforms:
+- linux-x64
+- macos-arm64
+project: swift-package
+prose_fail_level: suggestion
+repository_visibility: public
