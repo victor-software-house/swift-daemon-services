@@ -42,7 +42,12 @@ It SHALL fail with `alreadyExists` when the group has an identity of that name.
 ### Requirement: The chain is stored so macOS forms a SecIdentity
 
 `store(chain:for:)` SHALL fail with `keyMismatch` when the leaf's public key is not the identity's.
-Otherwise it SHALL store the leaf as a certificate item and the whole chain as one keychain item, replacing the identity's previous ones, and `identity(named:)` SHALL then return the chain and a `SecIdentity`.
+Otherwise it SHALL store:
+
+- the leaf as a certificate item
+- the whole chain as one keychain item
+
+These replace the identity's previous ones, and `identity(named:)` SHALL then return the chain and a `SecIdentity`.
 It SHALL fail, and leave the previous leaf and chain in place, when macOS forms no `SecIdentity`.
 
 #### Scenario: A wrong leaf

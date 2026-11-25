@@ -5,7 +5,7 @@ import SwiftASN1
 import X509
 
 extension Certificate {
-    // The certificate in DER form.
+    // The certificate as encoded bytes.
     func derData() throws -> Data {
         var serializer = DER.Serializer()
         try serializer.serialize(self)
@@ -13,10 +13,10 @@ extension Certificate {
     }
 }
 
-// The items of one identity besides its key, as the keychain or a test double holds them:
-// the leaf as a certificate item, and the whole chain as one item that keeps its order.
+// The items of one identity besides its key, in the keychain or in a test double.
+// A certificate item is the leaf. One more item keeps the whole chain in order.
 protocol ChainItems {
-    // The DER of every leaf certificate item of the identity.
+    // The encoded bytes of every leaf certificate item of the identity.
     func leafCertificates() throws -> [Data]
 
     // Adds a leaf certificate item. Returns false when an identical one is already stored.
@@ -50,9 +50,10 @@ enum Chain {
         return leafKey.x963Representation == publicKey.x963Representation
     }
 
-    // Replaces the stored chain: adds the new leaf, writes the chain, checks that macOS forms an identity
-    // from the new leaf, then deletes the old leaf. A reader finds a leaf and a chain at every step.
-    // When a step fails or no identity forms, the new leaf is deleted and the old chain is written back.
+    // Replaces the stored chain in four steps.
+    // It adds the new leaf, writes the chain, and checks that macOS forms an identity.
+    // Then it deletes the old leaf, so a reader finds a leaf at every step.
+    // When a step fails, it deletes the new leaf and writes the old chain back.
     static func replace(in items: some ChainItems, with newChain: [Data]) throws {
         guard let leaf = newChain.first else {
             throw KeychainIdentityError.keyMismatch
@@ -87,8 +88,9 @@ enum Chain {
     }
 }
 
-// The items of an identity in the data-protection keychain: the leaf as a certificate item labelled with
-// the identity's name, and the chain as a generic password item of the service and the name.
+// An identity's items in the data-protection keychain.
+// The leaf is a certificate item labelled with the identity's name.
+// A generic password item of the service and the name keeps the chain.
 struct KeychainChainItems: ChainItems {
     let accessGroup: String
     let service: String

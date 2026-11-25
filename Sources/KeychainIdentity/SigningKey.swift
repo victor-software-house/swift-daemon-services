@@ -3,13 +3,13 @@ import Foundation
 import Security
 import X509
 
-// A P-256 key that signs messages with ECDSA over SHA-256.
+// A key on the P-256 curve that signs messages after it hashes them with SHA-256.
 // The Secure Enclave key is the product's implementation; the software key is for tests.
 protocol SigningKey: Sendable {
     // The key's public half.
     var publicKey: P256.Signing.PublicKey { get }
 
-    // The signature of the message as X9.62 DER, the form TLS and X.509 carry.
+    // The signature of the message in the X9.62 format that TLS and X.509 use.
     func signature(for message: Data) throws -> Data
 
     // The key for swift-certificates, which signs requests and certificates with it.

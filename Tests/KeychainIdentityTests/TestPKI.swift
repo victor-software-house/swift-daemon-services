@@ -3,13 +3,13 @@ import Foundation
 import SwiftASN1
 import X509
 
-// A throwaway certificate authority for tests, signing with a software P-256 key.
+// A test authority.
 struct TestAuthority {
     let signer: P256.Signing.PrivateKey
     let name: DistinguishedName
     let certificate: Certificate
 
-    // A self-signed authority, or one issued by another authority when `issuer` is given.
+    // A self-signed authority, or one with an issuer.
     init(commonName: String, issuer: TestAuthority? = nil) throws {
         let signer = P256.Signing.PrivateKey()
         let name = try DistinguishedName { CommonName(commonName) }
@@ -27,7 +27,7 @@ struct TestAuthority {
         )
     }
 
-    // A certificate for a leaf key, signed by this authority.
+    // A certificate for a key.
     func issue(commonName: String, publicKey: P256.Signing.PublicKey) throws -> Certificate {
         try TestPKI.certificate(
             subject: DistinguishedName { CommonName(commonName) },

@@ -1,5 +1,5 @@
-# Two small apps that prove one app can sign with a Secure Enclave key another app created.
-# The signing team is never written here: pass DEVELOPMENT_TEAM to xcodebuild, as Probe/README.md says.
+# One app creates a Secure Enclave key, and the other app signs with it.
+# No file names the signing team, and Probe/README.md says how to pass it.
 name: Probe
 options:
   deploymentTarget:

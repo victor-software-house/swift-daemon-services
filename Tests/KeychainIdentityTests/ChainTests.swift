@@ -23,7 +23,7 @@ private func data(_ names: String...) -> [Data] {
     names.map { Data($0.utf8) }
 }
 
-// The stand-in for the keychain: it records each operation, and the certificates are plain names.
+// A stand-in for the keychain. It records each step. Certificates are plain names.
 private final class FakeItems: ChainItems {
     var leaves: [Data]
     var chain: [Data]?

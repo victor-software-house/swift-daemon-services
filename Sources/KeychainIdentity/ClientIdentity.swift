@@ -28,14 +28,14 @@ public struct ClientIdentity: @unchecked Sendable {
     /// Signs a message with the identity's key.
     ///
     /// - Parameter message: The bytes to sign. The key hashes them with SHA-256.
-    /// - Returns: The ECDSA signature in X9.62 DER form.
+    /// - Returns: The signature in the X9.62 format that TLS and X.509 use.
     /// - Throws: `KeychainIdentityError/lockedSinceBoot` before the first unlock, or another `KeychainIdentityError`.
     public func sign(_ message: Data) throws -> Data {
         try signingKey.signature(for: message)
     }
 }
 
-/// A PKCS 10 certificate signing request for an identity, to send to a certificate authority.
+/// A certificate signing request for an identity, to send to a certificate authority.
 public struct SigningRequest: Equatable, Sendable {
     /// The request in Distinguished Encoding Rules.
     public let der: Data

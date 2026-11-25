@@ -57,18 +57,27 @@ Facts read on 2026-11-25:
 ### 3. The leaf is a certificate item and the chain is one item
 
 1. `store(chain:for:)` checks that the leaf's public key equals the identity's key.
-   Only the leaf is a `kSecClassCertificate` item, labelled with the identity's name, because that is all macOS needs to form a `SecIdentity` with the key.
-   The whole chain, leaf first, is one generic-password item of the data-protection keychain in the same group, with the service `<group suffix>.chain`, the account set to the identity's name, and the same accessibility as the key.
-   No intermediate is a certificate item, so two identities that share an intermediate never collide.
-2. A store replaces the previous leaf and chain in one pass.
-   It adds the new leaf, where an item with identical DER counts as present, then writes the chain item, updating it or adding it.
-   It reads the `SecIdentity` back and, when macOS forms none, deletes the new leaf, puts the old chain back and fails.
-   Only then does it delete the old leaf item of that name, so a reader never finds none.
-3. `identity(named:)` returns a `ClientIdentity`, or nil when the group has no key of that name.
-   It holds the name, the public key, the chain read from the chain item and parsed with `swift-certificates`, and the `SecIdentity` macOS forms from the key and the leaf.
-   Before a chain is stored, the chain is empty and the `SecIdentity` is nil.
-   It signs with `sign(_:)`, which returns an X9.62 DER ECDSA signature over SHA-256, and exposes no `SecKey`.
-4. `remove(name:)` deletes the key, the leaf item and the chain item.
+2. The leaf is the only `kSecClassCertificate` item, labelled with the identity's name.
+   That is all macOS needs to form a `SecIdentity` with the key.
+3. The whole chain, leaf first, is one generic-password item of the data-protection keychain in the same group.
+   - Its service is `<group suffix>.chain`, and its account is the identity's name.
+   - Its accessibility is the key's.
+   - No intermediate is a certificate item, so two identities that share an intermediate never collide.
+4. A store replaces the previous leaf and chain in these steps:
+   - It adds the new leaf.
+     An item with identical bytes counts as present.
+   - It writes the chain item, updating it or adding it.
+   - It reads the `SecIdentity` back.
+     When macOS forms none, it deletes the new leaf, puts the old chain back and fails.
+   - It deletes the old leaf item of that name, so a reader never finds none.
+5. `identity(named:)` returns a `ClientIdentity`, or nil when the group has no key of that name.
+   - The identity has a name, a public key, a chain and a `SecIdentity`.
+   - The chain comes from the chain item, parsed with `swift-certificates`.
+   - macOS forms the `SecIdentity` from the key and the leaf.
+   - Before a chain is stored, the chain is empty and the `SecIdentity` is nil.
+   - `sign(_:)` returns an X9.62 signature over SHA-256.
+   - The identity exposes no `SecKey`.
+6. `remove(name:)` deletes the key, the leaf item and the chain item.
 
 ### 4. The signing request comes from `swift-certificates`
 

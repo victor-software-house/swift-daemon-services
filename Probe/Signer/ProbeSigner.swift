@@ -2,8 +2,9 @@ import CryptoKit
 import Foundation
 import KeychainIdentity
 
-// Reads the identity "probe", signs 200 messages with it, checks each signature against the public key
-// the other app wrote, and logs the median, the 95th percentile and the maximum time in milliseconds.
+// Reads the identity "probe" and signs 200 messages with it.
+// It checks each signature with the public key that the other app wrote.
+// It logs the median, the 95th percentile and the maximum time in milliseconds.
 @main
 enum ProbeSigner {
     static let signatures = 200

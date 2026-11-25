@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-// What the running code's signature says: its team and the keychain groups it may use.
+// The team and the keychain groups in the signature of the running code.
 enum RunningCode {
     // The signing team of the running code, or nil when it has none.
     // Unsigned code, ad hoc code and Apple platform code carry no team.

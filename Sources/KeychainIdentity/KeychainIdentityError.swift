@@ -10,9 +10,9 @@ public enum KeychainIdentityError: Error, Equatable, Sendable {
     case notSigned
     /// The code's `keychain-access-groups` entitlement does not list the group.
     case missingEntitlement(group: String)
-    /// The keychain holds no identity with this name.
+    /// The keychain has no identity with this name.
     case notFound(name: String)
-    /// The group already holds an identity with this name.
+    /// The group already has an identity with this name.
     case alreadyExists(name: String)
     /// The leaf certificate does not carry the identity's public key.
     case keyMismatch

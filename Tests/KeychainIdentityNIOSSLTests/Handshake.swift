@@ -10,7 +10,7 @@ import X509
 
 // What one side read when its handshake completed.
 struct HandshakeResult: Sendable {
-    // The certificate of the peer, in DER.
+    // The certificate of the peer, as encoded bytes.
     let peerCertificate: [UInt8]?
     let isTLS13: Bool
 }

@@ -9,8 +9,10 @@ import X509
 
 /// A TLS private key that signs with the key of a `ClientIdentity`.
 ///
-/// The key offers only `ecdsa_secp256r1_sha256`. It signs on a serial queue of its own and completes
-/// the handshake's promise on the channel's event loop, so a slow signature never stalls other connections.
+/// The key offers only `ecdsa_secp256r1_sha256`.
+/// It signs on a serial queue of its own.
+/// It completes the promise of the handshake on the channel's event loop.
+/// A slow signature never stalls other connections.
 public final class KeychainIdentityPrivateKey: NIOSSLCustomPrivateKey, Hashable, Sendable {
     private let identity: ClientIdentity
     private let queue = DispatchQueue(label: "KeychainIdentityPrivateKey")
@@ -22,7 +24,7 @@ public final class KeychainIdentityPrivateKey: NIOSSLCustomPrivateKey, Hashable,
         self.identity = identity
     }
 
-    /// The one signature algorithm the key offers: ECDSA over P-256 with SHA-256.
+    /// The one signature algorithm the key offers, with the P-256 curve and SHA-256.
     public var signatureAlgorithms: [SignatureAlgorithm] {
         [.ecdsaSecp256R1Sha256]
     }
@@ -33,7 +35,7 @@ public final class KeychainIdentityPrivateKey: NIOSSLCustomPrivateKey, Hashable,
     ///   - channel: The channel that handshakes.
     ///   - algorithm: The signature algorithm the handshake chose.
     ///   - data: The data to sign. The key hashes it with SHA-256.
-    /// - Returns: A future with the DER signature, completed on the channel's event loop.
+    /// - Returns: A future with the signature, completed on the channel's event loop.
     public func sign(
         channel: any Channel,
         algorithm: SignatureAlgorithm,
@@ -55,7 +57,7 @@ public final class KeychainIdentityPrivateKey: NIOSSLCustomPrivateKey, Hashable,
         return promise.futureResult
     }
 
-    /// Fails: an ECDSA key never decrypts.
+    /// Fails, because a key on an elliptic curve never decrypts.
     ///
     /// - Parameters:
     ///   - channel: The channel that handshakes.
@@ -86,10 +88,10 @@ public final class KeychainIdentityPrivateKey: NIOSSLCustomPrivateKey, Hashable,
 extension TLSConfiguration {
     /// A client configuration that presents an identity's certificate chain and signs with its key.
     ///
-    /// - Parameter identity: The identity to present. Its chain must hold at least its leaf.
+    /// - Parameter identity: The identity to present. Its chain must have at least its leaf.
     /// - Returns: A client configuration; the caller sets trust roots and anything else it needs.
     /// - Throws: `KeychainIdentityError.notFound(name:)` when the identity has no chain stored,
-    ///   or the error of NIOSSL when it cannot read a certificate.
+    ///   or the error of the TLS library when it cannot read a certificate.
     public static func clientConfiguration(presenting identity: ClientIdentity) throws -> TLSConfiguration {
         guard !identity.chain.isEmpty else {
             throw KeychainIdentityError.notFound(name: identity.name)

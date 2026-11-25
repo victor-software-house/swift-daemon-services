@@ -139,14 +139,14 @@ public struct IdentityStore: Sendable {
         }
     }
 
-    /// Builds a PKCS 10 certificate signing request for an identity, signed by its key.
+    /// Builds a certificate signing request for an identity, signed by its key.
     ///
     /// The request carries the subject and no attribute the caller did not give.
     ///
     /// - Parameters:
     ///   - identity: The identity whose public key the request is for.
     ///   - subject: The subject of the future certificate.
-    /// - Returns: The request in DER and PEM form.
+    /// - Returns: The request as binary bytes and as PEM text.
     /// - Throws: `KeychainIdentityError`, or the error of swift-certificates when it cannot build the request.
     public func signingRequest(for identity: ClientIdentity, subject: DistinguishedName) throws -> SigningRequest {
         try Self.signingRequest(signedBy: identity.signingKey, subject: subject)
@@ -154,9 +154,11 @@ public struct IdentityStore: Sendable {
 
     /// Stores the certificate chain of an identity, replacing the one it had.
     ///
-    /// The leaf is a certificate item that macOS pairs with the key, and the whole chain is one keychain item.
-    /// The new leaf and chain are written first and the old leaf deleted after, so a reader always finds a leaf.
-    /// The call fails, and puts the old chain back, when macOS forms no `SecIdentity` from the key and the new leaf.
+    /// The leaf is a certificate item that macOS pairs with the key.
+    /// The whole chain is one keychain item.
+    ///
+    /// A store writes the new leaf and chain before it deletes the old leaf, so a reader always finds a leaf.
+    /// When macOS forms no `SecIdentity` from the key and the new leaf, the call fails and puts the old chain back.
     ///
     /// - Parameters:
     ///   - chain: The certificates, leaf first.
