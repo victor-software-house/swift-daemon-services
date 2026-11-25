@@ -12,6 +12,9 @@ public struct IdentityStore: Sendable {
     /// The keychain access group of the store.
     public let accessGroup: String
 
+    // The service of the generic password item that keeps an identity's chain.
+    private let chainService: String
+
     /// Opens the store of a group suffix.
     ///
     /// - Parameter groupSuffix: The part of the group after the team identifier.
@@ -23,11 +26,13 @@ public struct IdentityStore: Sendable {
             suffix: groupSuffix,
             entitled: RunningCode.keychainAccessGroups()
         )
+        self.chainService = "\(groupSuffix).chain"
     }
 
     // A store of a group that has not been checked against the running code.
-    init(accessGroup: String) {
+    init(accessGroup: String, groupSuffix: String) {
         self.accessGroup = accessGroup
+        self.chainService = "\(groupSuffix).chain"
     }
 
     /// Creates an identity: a Secure Enclave P-256 key in the group.
@@ -92,31 +97,44 @@ public struct IdentityStore: Sendable {
             return nil
         }
         let signingKey = try SecKeySigningKey(key)
-        let items = KeychainChainItems(accessGroup: accessGroup, name: name)
-        let certificates = try items.storedChain().map { try Certificate(derEncoded: Array($0)) }
-        let chain = Chain.ordered(certificates, leafKey: signingKey.publicKey)
+        let items = chainItems(named: name)
+        let chain = try items.storedChain()?.map { try Certificate(derEncoded: Array($0)) } ?? []
+        guard chain.isEmpty || Chain.leafMatches(chain, publicKey: signingKey.publicKey) else {
+            throw KeychainIdentityError.keyMismatch
+        }
         let secIdentity = try chain.first.flatMap { try items.secIdentity(forLeaf: $0.derData()) }
         return ClientIdentity(name: name, chain: chain, secIdentity: secIdentity, signingKey: signingKey)
     }
 
-    /// Removes an identity: its key and every certificate stored for it.
+    /// Removes an identity: its key, its leaf certificate and its stored chain.
     ///
     /// - Parameter name: The name of the identity.
     /// - Throws: `KeychainIdentityError/notFound(name:)` when there is nothing to remove,
     ///   or another `KeychainIdentityError`.
     public func remove(name: String) throws {
         let keyStatus = SecItemDelete(keyQuery(named: name) as CFDictionary)
-        let certificateQuery: [String: Any] = [
+        let leafQuery: [String: Any] = [
             kSecClass as String: kSecClassCertificate,
             kSecAttrLabel as String: name,
             kSecAttrAccessGroup as String: accessGroup,
             kSecUseDataProtectionKeychain as String: true,
         ]
-        let certificateStatus = SecItemDelete(certificateQuery as CFDictionary)
-        for status in [keyStatus, certificateStatus] where status != errSecSuccess && status != errSecItemNotFound {
+        let chainQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: chainService,
+            kSecAttrAccount as String: name,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecUseDataProtectionKeychain as String: true,
+        ]
+        let statuses = [
+            keyStatus,
+            SecItemDelete(leafQuery as CFDictionary),
+            SecItemDelete(chainQuery as CFDictionary),
+        ]
+        for status in statuses where status != errSecSuccess && status != errSecItemNotFound {
             throw KeychainIdentityError.mapped(status)
         }
-        if keyStatus == errSecItemNotFound && certificateStatus == errSecItemNotFound {
+        if statuses.allSatisfy({ $0 == errSecItemNotFound }) {
             throw KeychainIdentityError.notFound(name: name)
         }
     }
@@ -136,8 +154,9 @@ public struct IdentityStore: Sendable {
 
     /// Stores the certificate chain of an identity, replacing the one it had.
     ///
-    /// The new certificates are added first and the old ones deleted after, so a reader always finds a chain.
-    /// The call fails when macOS forms no `SecIdentity` from the key and the new leaf.
+    /// The leaf is a certificate item that macOS pairs with the key, and the whole chain is one keychain item.
+    /// The new leaf and chain are written first and the old leaf deleted after, so a reader always finds a leaf.
+    /// The call fails, and puts the old chain back, when macOS forms no `SecIdentity` from the key and the new leaf.
     ///
     /// - Parameters:
     ///   - chain: The certificates, leaf first.
@@ -148,8 +167,7 @@ public struct IdentityStore: Sendable {
         guard Chain.leafMatches(chain, publicKey: identity.publicKey) else {
             throw KeychainIdentityError.keyMismatch
         }
-        let items = KeychainChainItems(accessGroup: accessGroup, name: identity.name)
-        try Chain.replace(in: items, with: chain.map { try $0.derData() })
+        try Chain.replace(in: chainItems(named: identity.name), with: chain.map { try $0.derData() })
     }
 
     static func signingRequest(signedBy key: any SigningKey, subject: DistinguishedName) throws -> SigningRequest {
@@ -165,6 +183,10 @@ public struct IdentityStore: Sendable {
             der: Data(serializer.serializedBytes),
             pem: try request.serializeAsPEM().pemString
         )
+    }
+
+    private func chainItems(named name: String) -> KeychainChainItems {
+        KeychainChainItems(accessGroup: accessGroup, service: chainService, name: name)
     }
 
     private func keyQuery(named name: String) -> [String: Any] {

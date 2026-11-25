@@ -15,60 +15,80 @@ private func makeIdentity() -> ClientIdentity {
     )
 }
 
-// The stand-in for the keychain: it records each operation, and the certificates are plain names.
-private final class FakeItems: ChainItems {
-    var stored: [Data]
-    var operations: [String] = []
-    var formsAnIdentity = true
-    var failingAdd: Data?
-
-    init(stored: [String]) {
-        self.stored = stored.map { Data($0.utf8) }
-    }
-
-    func storedChain() throws -> [Data] {
-        stored
-    }
-
-    func add(_ der: Data) throws {
-        operations.append("add \(String(decoding: der, as: UTF8.self))")
-        if der == failingAdd {
-            throw KeychainIdentityError.keychain(errSecIO)
-        }
-        stored.append(der)
-    }
-
-    func remove(_ der: Data) throws {
-        operations.append("remove \(String(decoding: der, as: UTF8.self))")
-        stored.removeAll { $0 == der }
-    }
-
-    func formsIdentity(forLeaf der: Data) throws -> Bool {
-        operations.append("identity \(String(decoding: der, as: UTF8.self))")
-        return formsAnIdentity
-    }
-
-    var names: Set<String> {
-        Set(stored.map { String(decoding: $0, as: UTF8.self) })
-    }
+private func name(_ der: Data) -> String {
+    String(decoding: der, as: UTF8.self)
 }
 
 private func data(_ names: String...) -> [Data] {
     names.map { Data($0.utf8) }
 }
 
+// The stand-in for the keychain: it records each operation, and the certificates are plain names.
+private final class FakeItems: ChainItems {
+    var leaves: [Data]
+    var chain: [Data]?
+    var operations: [String] = []
+    var formsAnIdentity = true
+    var failingChain: [Data]?
+
+    init(leaves: [String], chain: [String]?) {
+        self.leaves = leaves.map { Data($0.utf8) }
+        self.chain = chain?.map { Data($0.utf8) }
+    }
+
+    func leafCertificates() throws -> [Data] {
+        leaves
+    }
+
+    func addLeaf(_ der: Data) throws -> Bool {
+        operations.append("add \(name(der))")
+        if leaves.contains(der) {
+            return false
+        }
+        leaves.append(der)
+        return true
+    }
+
+    func removeLeaf(_ der: Data) throws {
+        operations.append("remove \(name(der))")
+        leaves.removeAll { $0 == der }
+    }
+
+    func storedChain() throws -> [Data]? {
+        chain
+    }
+
+    func writeChain(_ chain: [Data]) throws {
+        operations.append("write \(chain.map(name).joined(separator: ","))")
+        if chain == failingChain {
+            throw KeychainIdentityError.keychain(errSecIO)
+        }
+        self.chain = chain
+    }
+
+    func removeChain() throws {
+        operations.append("remove chain")
+        chain = nil
+    }
+
+    func formsIdentity(forLeaf der: Data) throws -> Bool {
+        operations.append("identity \(name(der))")
+        return formsAnIdentity
+    }
+}
+
 @Test func aLeafOfAnotherKeyIsAMismatch() throws {
     let authority = try TestAuthority(commonName: "Test CA")
     let identity = makeIdentity()
     let other = try authority.issue(commonName: "other", publicKey: P256.Signing.PrivateKey().publicKey)
-    let store = IdentityStore(accessGroup: "TEAMID1234.test")
+    let store = IdentityStore(accessGroup: "TEAMID1234.test", groupSuffix: "test")
     #expect(throws: KeychainIdentityError.keyMismatch) {
         try store.store(chain: [other, authority.certificate], for: identity)
     }
 }
 
 @Test func anEmptyChainIsAMismatch() {
-    let store = IdentityStore(accessGroup: "TEAMID1234.test")
+    let store = IdentityStore(accessGroup: "TEAMID1234.test", groupSuffix: "test")
     #expect(throws: KeychainIdentityError.keyMismatch) {
         try store.store(chain: [], for: makeIdentity())
     }
@@ -82,66 +102,68 @@ private func data(_ names: String...) -> [Data] {
     #expect(!Chain.leafMatches([authority.certificate, leaf], publicKey: identity.publicKey))
 }
 
-@Test func theChainIsOrderedFromTheLeafUp() throws {
-    let root = try TestAuthority(commonName: "Test Root")
-    let intermediate = try TestAuthority(commonName: "Test Intermediate", issuer: root)
-    let identity = makeIdentity()
-    let leaf = try intermediate.issue(commonName: "client", publicKey: identity.publicKey)
-    let stray = try TestAuthority(commonName: "Stray")
-    let ordered = Chain.ordered(
-        [root.certificate, stray.certificate, leaf, intermediate.certificate],
-        leafKey: identity.publicKey
-    )
-    #expect(ordered == [leaf, intermediate.certificate, root.certificate])
-}
-
-@Test func noLeafGivesNoChain() throws {
-    let root = try TestAuthority(commonName: "Test Root")
-    #expect(Chain.ordered([root.certificate], leafKey: makeIdentity().publicKey).isEmpty)
-}
-
-@Test func aRenewalAddsTheNewLeafAndDeletesTheOldOne() throws {
-    let items = FakeItems(stored: ["old leaf", "intermediate"])
+@Test func aRenewalWritesTheNewLeafAndChainThenDeletesTheOldLeaf() throws {
+    let items = FakeItems(leaves: ["old leaf"], chain: ["old leaf", "intermediate"])
     try Chain.replace(in: items, with: data("new leaf", "intermediate"))
-    #expect(items.operations == ["add new leaf", "identity new leaf", "remove old leaf"])
-    #expect(items.names == ["new leaf", "intermediate"])
+    #expect(
+        items.operations == [
+            "add new leaf", "write new leaf,intermediate", "identity new leaf", "remove old leaf",
+        ]
+    )
+    #expect(items.leaves == data("new leaf"))
+    #expect(items.chain == data("new leaf", "intermediate"))
 }
 
-@Test func theFirstStoreOnlyAdds() throws {
-    let items = FakeItems(stored: [])
+@Test func theFirstStoreDeletesNothing() throws {
+    let items = FakeItems(leaves: [], chain: nil)
     try Chain.replace(in: items, with: data("leaf", "intermediate"))
-    #expect(items.operations == ["add leaf", "add intermediate", "identity leaf"])
-    #expect(items.names == ["leaf", "intermediate"])
+    #expect(items.operations == ["add leaf", "write leaf,intermediate", "identity leaf"])
+    #expect(items.leaves == data("leaf"))
 }
 
-@Test func noIdentityLeavesTheStoredChainAsItWas() {
-    let items = FakeItems(stored: ["old leaf", "intermediate"])
+@Test func theSameLeafStaysWhenOnlyTheChainChanges() throws {
+    let items = FakeItems(leaves: ["leaf"], chain: ["leaf"])
+    try Chain.replace(in: items, with: data("leaf", "intermediate"))
+    #expect(items.operations == ["add leaf", "write leaf,intermediate", "identity leaf"])
+    #expect(items.leaves == data("leaf"))
+    #expect(items.chain == data("leaf", "intermediate"))
+}
+
+@Test func noIdentityLeavesTheOldLeafAndChainAsTheyWere() {
+    let items = FakeItems(leaves: ["old leaf"], chain: ["old leaf", "intermediate"])
     items.formsAnIdentity = false
     #expect(throws: KeychainIdentityError.keychain(errSecItemNotFound)) {
         try Chain.replace(in: items, with: data("new leaf", "intermediate"))
     }
-    #expect(items.names == ["old leaf", "intermediate"])
-    #expect(items.operations == ["add new leaf", "identity new leaf", "remove new leaf"])
+    #expect(items.leaves == data("old leaf"))
+    #expect(items.chain == data("old leaf", "intermediate"))
 }
 
-@Test func aFailedAddLeavesTheStoredChainAsItWas() {
-    let items = FakeItems(stored: ["old leaf"])
-    items.failingAdd = Data("second".utf8)
+@Test func noIdentityOnAFirstStoreLeavesNothing() {
+    let items = FakeItems(leaves: [], chain: nil)
+    items.formsAnIdentity = false
+    #expect(throws: KeychainIdentityError.keychain(errSecItemNotFound)) {
+        try Chain.replace(in: items, with: data("leaf"))
+    }
+    #expect(items.leaves.isEmpty)
+    #expect(items.chain == nil)
+}
+
+@Test func aFailedChainWriteLeavesTheOldLeafAndChainAsTheyWere() {
+    let items = FakeItems(leaves: ["old leaf"], chain: ["old leaf"])
+    items.failingChain = data("new leaf", "second")
     #expect(throws: KeychainIdentityError.keychain(errSecIO)) {
         try Chain.replace(in: items, with: data("new leaf", "second"))
     }
-    #expect(items.names == ["old leaf"])
+    #expect(items.leaves == data("old leaf"))
+    #expect(items.chain == data("old leaf"))
 }
 
 @Test func anEmptyReplacementIsAMismatch() {
-    let items = FakeItems(stored: ["old leaf"])
+    let items = FakeItems(leaves: ["old leaf"], chain: ["old leaf"])
     #expect(throws: KeychainIdentityError.keyMismatch) {
         try Chain.replace(in: items, with: [])
     }
-    #expect(items.names == ["old leaf"])
-}
-
-@Test func theChangeKeepsSharedCertificates() {
-    let change = Chain.change(stored: data("a", "b"), new: data("c", "b"))
-    #expect(change == Chain.Change(toAdd: data("c"), toDelete: data("a")))
+    #expect(items.leaves == data("old leaf"))
+    #expect(items.operations.isEmpty)
 }

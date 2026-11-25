@@ -13,37 +13,32 @@ extension Certificate {
     }
 }
 
-// The certificate items of one identity, as the keychain or a test double holds them.
+// The items of one identity besides its key, as the keychain or a test double holds them:
+// the leaf as a certificate item, and the whole chain as one item that keeps its order.
 protocol ChainItems {
-    // The DER of every stored certificate of the identity.
-    func storedChain() throws -> [Data]
+    // The DER of every leaf certificate item of the identity.
+    func leafCertificates() throws -> [Data]
 
-    // Adds a certificate. A certificate that is already stored is not an error.
-    func add(_ der: Data) throws
+    // Adds a leaf certificate item. Returns false when an identical one is already stored.
+    func addLeaf(_ der: Data) throws -> Bool
 
-    // Deletes a certificate.
-    func remove(_ der: Data) throws
+    // Deletes a leaf certificate item.
+    func removeLeaf(_ der: Data) throws
 
-    // Whether macOS forms an identity from the identity's key and this certificate.
+    // The stored chain, leaf first, or nil when none is stored.
+    func storedChain() throws -> [Data]?
+
+    // Stores the chain, replacing the one stored.
+    func writeChain(_ chain: [Data]) throws
+
+    // Deletes the stored chain.
+    func removeChain() throws
+
+    // Whether macOS forms an identity from the identity's key and this leaf.
     func formsIdentity(forLeaf der: Data) throws -> Bool
 }
 
 enum Chain {
-    // What a store changes: the certificates to add and the old ones to delete.
-    struct Change: Equatable {
-        let toAdd: [Data]
-        let toDelete: [Data]
-    }
-
-    static func change(stored: [Data], new: [Data]) -> Change {
-        let storedSet = Set(stored)
-        let newSet = Set(new)
-        return Change(
-            toAdd: new.filter { !storedSet.contains($0) },
-            toDelete: stored.filter { !newSet.contains($0) }
-        )
-    }
-
     // Whether the leaf carries the identity's public key.
     static func leafMatches(_ chain: [Certificate], publicKey: P256.Signing.PublicKey) -> Bool {
         guard
@@ -55,57 +50,51 @@ enum Chain {
         return leafKey.x963Representation == publicKey.x963Representation
     }
 
-    // Replaces the stored chain: adds the new certificates, checks that macOS forms an identity
-    // from the new leaf, then deletes the old certificates. A reader finds a chain at every step.
-    // When an add fails or no identity forms, the certificates this call added are deleted again.
+    // Replaces the stored chain: adds the new leaf, writes the chain, checks that macOS forms an identity
+    // from the new leaf, then deletes the old leaf. A reader finds a leaf and a chain at every step.
+    // When a step fails or no identity forms, the new leaf is deleted and the old chain is written back.
     static func replace(in items: some ChainItems, with newChain: [Data]) throws {
         guard let leaf = newChain.first else {
             throw KeychainIdentityError.keyMismatch
         }
-        let plan = change(stored: try items.storedChain(), new: newChain)
-        var added: [Data] = []
+        let oldChain = try items.storedChain()
+        let oldLeaves = try items.leafCertificates()
+        var addedLeaf = false
+        var wroteChain = false
         do {
-            for der in plan.toAdd {
-                try items.add(der)
-                added.append(der)
-            }
+            addedLeaf = try items.addLeaf(leaf)
+            wroteChain = true
+            try items.writeChain(newChain)
             guard try items.formsIdentity(forLeaf: leaf) else {
                 throw KeychainIdentityError.keychain(errSecItemNotFound)
             }
         } catch {
-            for der in added {
-                _ = try? items.remove(der)
+            if wroteChain {
+                if let oldChain {
+                    _ = try? items.writeChain(oldChain)
+                } else {
+                    _ = try? items.removeChain()
+                }
+            }
+            if addedLeaf {
+                _ = try? items.removeLeaf(leaf)
             }
             throw error
         }
-        for der in plan.toDelete {
-            try items.remove(der)
+        for der in oldLeaves where der != leaf {
+            try items.removeLeaf(der)
         }
-    }
-
-    // The chain from the leaf up: the certificate that carries the key, then the issuer of each,
-    // as far as the stored certificates reach. Certificates that no chain step reaches are left out.
-    static func ordered(_ certificates: [Certificate], leafKey: P256.Signing.PublicKey) -> [Certificate] {
-        guard let leaf = certificates.first(where: { leafMatches([$0], publicKey: leafKey) }) else {
-            return []
-        }
-        var chain = [leaf]
-        var rest = certificates.filter { $0 != leaf }
-        while let current = chain.last, current.issuer != current.subject,
-            let index = rest.firstIndex(where: { $0.subject == current.issuer })
-        {
-            chain.append(rest.remove(at: index))
-        }
-        return chain
     }
 }
 
-// The certificate items of an identity in the data-protection keychain, found by the identity's name.
+// The items of an identity in the data-protection keychain: the leaf as a certificate item labelled with
+// the identity's name, and the chain as a generic password item of the service and the name.
 struct KeychainChainItems: ChainItems {
     let accessGroup: String
+    let service: String
     let name: String
 
-    private var certificateQuery: [String: Any] {
+    private var leafQuery: [String: Any] {
         [
             kSecClass as String: kSecClassCertificate,
             kSecAttrLabel as String: name,
@@ -114,8 +103,18 @@ struct KeychainChainItems: ChainItems {
         ]
     }
 
-    func storedChain() throws -> [Data] {
-        var query = certificateQuery
+    private var chainQuery: [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: name,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecUseDataProtectionKeychain as String: true,
+        ]
+    }
+
+    func leafCertificates() throws -> [Data] {
+        var query = leafQuery
         query[kSecReturnRef as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitAll
         var result: CFTypeRef?
@@ -126,22 +125,73 @@ struct KeychainChainItems: ChainItems {
         guard status == errSecSuccess else {
             throw KeychainIdentityError.mapped(status)
         }
-        return try Self.certificates(in: result).map { SecCertificateCopyData($0) as Data }
+        guard let items = result as? [AnyObject] else {
+            throw KeychainIdentityError.keychain(errSecDecode)
+        }
+        return try items.map { item in
+            guard CFGetTypeID(item) == SecCertificateGetTypeID() else {
+                throw KeychainIdentityError.keychain(errSecDecode)
+            }
+            return SecCertificateCopyData(unsafeDowncast(item, to: SecCertificate.self)) as Data
+        }
     }
 
-    func add(_ der: Data) throws {
-        var attributes = certificateQuery
+    func addLeaf(_ der: Data) throws -> Bool {
+        var attributes = leafQuery
         attributes[kSecValueRef as String] = try Self.certificate(der)
         let status = SecItemAdd(attributes as CFDictionary, nil)
-        guard status == errSecSuccess || status == errSecDuplicateItem else {
+        if status == errSecSuccess {
+            return true
+        }
+        guard status == errSecDuplicateItem, try leafCertificates().contains(der) else {
+            throw KeychainIdentityError.mapped(status)
+        }
+        return false
+    }
+
+    func removeLeaf(_ der: Data) throws {
+        var query = leafQuery
+        query[kSecValueRef as String] = try Self.certificate(der)
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainIdentityError.mapped(status)
         }
     }
 
-    func remove(_ der: Data) throws {
-        var query = certificateQuery
-        query[kSecValueRef as String] = try Self.certificate(der)
-        let status = SecItemDelete(query as CFDictionary)
+    func storedChain() throws -> [Data]? {
+        var query = chainQuery
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            return nil
+        }
+        guard status == errSecSuccess else {
+            throw KeychainIdentityError.mapped(status)
+        }
+        guard let data = result as? Data, let chain = try? JSONDecoder().decode([Data].self, from: data) else {
+            throw KeychainIdentityError.keychain(errSecDecode)
+        }
+        return chain
+    }
+
+    func writeChain(_ chain: [Data]) throws {
+        let data = try JSONEncoder().encode(chain)
+        var status = SecItemUpdate(chainQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecItemNotFound {
+            var attributes = chainQuery
+            attributes[kSecValueData as String] = data
+            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            status = SecItemAdd(attributes as CFDictionary, nil)
+        }
+        guard status == errSecSuccess else {
+            throw KeychainIdentityError.mapped(status)
+        }
+    }
+
+    func removeChain() throws {
+        let status = SecItemDelete(chainQuery as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainIdentityError.mapped(status)
         }
@@ -193,17 +243,5 @@ struct KeychainChainItems: ChainItems {
             throw KeychainIdentityError.keychain(errSecDecode)
         }
         return certificate
-    }
-
-    private static func certificates(in result: CFTypeRef?) throws -> [SecCertificate] {
-        guard let items = result as? [AnyObject] else {
-            throw KeychainIdentityError.keychain(errSecDecode)
-        }
-        return try items.map { item in
-            guard CFGetTypeID(item) == SecCertificateGetTypeID() else {
-                throw KeychainIdentityError.keychain(errSecDecode)
-            }
-            return unsafeDowncast(item, to: SecCertificate.self)
-        }
     }
 }
