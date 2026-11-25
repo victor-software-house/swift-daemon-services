@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier; edit with `copier update --data`.
-_commit: v0.0.144
+_commit: v0.0.145
 _src_path: https://github.com/victor-software-house/templates.git
 build_os: macos
 ci_extra_tasks: []
@@ -34,6 +34,7 @@ platforms:
 - macos-arm64
 project: swift-package
 prose_fail_level: suggestion
+repository: victor-software-house/swift-daemon-services
 repository_visibility: public
 swift_doc_targets:
 - KeychainIdentity
