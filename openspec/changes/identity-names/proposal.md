@@ -4,8 +4,8 @@
 
 1. A caller that keeps several identities in one team keychain group cannot ask which exist.
    It must remember each name, or call `identity(named:)` with a guess.
-2. A mirror client certificate renews every identity of a Mac.
-   It needs the list of names to do that, without a second record that can drift from the keychain.
+2. A command that lists a Mac's identities needs their names.
+   Reading them from the keychain keeps no second record that can drift from it.
 
 ## What Changes
 
