@@ -83,6 +83,34 @@ public struct IdentityStore: Sendable {
         return ClientIdentity(name: name, chain: chain, secIdentity: secIdentity, signingKey: signingKey)
     }
 
+    /// Lists the identities of the group.
+    ///
+    /// - Returns: The names of the identity keys in the group, sorted, or an empty list when there is none.
+    /// - Throws: `KeychainIdentityError/lockedSinceBoot` before the first unlock,
+    ///   or another `KeychainIdentityError`.
+    public func names() throws -> [String] {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+            kSecAttrAccessGroup as String: accessGroup,
+            kSecUseDataProtectionKeychain as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            return []
+        }
+        guard status == errSecSuccess else {
+            throw KeychainIdentityError.mapped(status)
+        }
+        guard let attributes = result as? [[String: Any]] else {
+            throw KeychainIdentityError.keychain(errSecDecode)
+        }
+        return Self.names(fromAttributes: attributes)
+    }
+
     /// Removes an identity: its key, its leaf certificate and its stored chain.
     ///
     /// - Parameter name: The name of the identity.
@@ -162,6 +190,17 @@ public struct IdentityStore: Sendable {
             der: Data(serializer.serializedBytes),
             pem: try request.serializeAsPEM().pemString
         )
+    }
+
+    // The sorted, distinct names in the application tags of key items. An item without a readable tag is skipped.
+    static func names(fromAttributes attributes: [[String: Any]]) -> [String] {
+        let names = attributes.compactMap { item -> String? in
+            guard let tag = item[kSecAttrApplicationTag as String] as? Data else {
+                return nil
+            }
+            return String(data: tag, encoding: .utf8)
+        }
+        return Set(names).sorted()
     }
 
     // No user presence, usable after the first unlock, and never migrated to another Mac.
