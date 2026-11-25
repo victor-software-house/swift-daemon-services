@@ -52,10 +52,14 @@
 
 ## 5. Release
 
-- [ ] 5.1 A changeset fragment, the Version PR, and the 0.0.1 tag.
+- [x] 5.1 A changeset fragment, the Version PR, and the 0.0.1 tag.
   Verify: the tag `v0.0.1` exists and `swift:api` passes on main.
+  - 2026-11-25 UTC, [PR 5][pr-5] merged through the merge queue, and the release run published [v0.0.1][v0.0.1].
+    `swift:api` passed in the merge-group run, with no earlier tag to compare against.
 
 [pr-3]: https://github.com/victor-software-house/swift-daemon-services/pull/3
 [run-3]: https://github.com/victor-software-house/swift-daemon-services/actions/runs/45623036475
 
 [c8f23988]: https://github.com/victor-software-house/swift-daemon-services/commit/8f23988b5cdd53665f5543fd11558873aec19c59
+[pr-5]: https://github.com/victor-software-house/swift-daemon-services/pull/5
+[v0.0.1]: https://github.com/victor-software-house/swift-daemon-services/releases/tag/v0.0.1
