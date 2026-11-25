@@ -54,13 +54,21 @@ Facts read on 2026-11-25:
 3. Alternative: the caller passes the whole group.
    It lost to package rule 3: the team would then sit in the caller's source.
 
-### 3. The certificate chain is stored as certificate items
+### 3. The leaf is a certificate item and the chain is one item
 
 1. `store(chain:for:)` checks that the leaf's public key equals the identity's key.
-   It then adds each certificate as a `kSecClassCertificate` item in the same group, the leaf labelled with the identity's name.
-2. A store replaces the previous chain of that identity in one pass.
-   It adds the new items, then deletes the old ones, so a reader never finds none.
-3. `identity(named:)` returns the key, the chain parsed with `swift-certificates`, and the `SecIdentity` macOS forms from the key and the leaf.
+   Only the leaf is a `kSecClassCertificate` item, labelled with the identity's name, because that is all macOS needs to form a `SecIdentity` with the key.
+   The whole chain, leaf first, is one generic-password item of the data-protection keychain in the same group, with the service `<group suffix>.chain`, the account set to the identity's name, and the same accessibility as the key.
+   No intermediate is a certificate item, so two identities that share an intermediate never collide.
+2. A store replaces the previous leaf and chain in one pass.
+   It adds the new leaf, where an item with identical DER counts as present, then writes the chain item, updating it or adding it.
+   It reads the `SecIdentity` back and, when macOS forms none, deletes the new leaf, puts the old chain back and fails.
+   Only then does it delete the old leaf item of that name, so a reader never finds none.
+3. `identity(named:)` returns a `ClientIdentity`, or nil when the group has no key of that name.
+   It holds the name, the public key, the chain read from the chain item and parsed with `swift-certificates`, and the `SecIdentity` macOS forms from the key and the leaf.
+   Before a chain is stored, the chain is empty and the `SecIdentity` is nil.
+   It signs with `sign(_:)`, which returns an X9.62 DER ECDSA signature over SHA-256, and exposes no `SecKey`.
+4. `remove(name:)` deletes the key, the leaf item and the chain item.
 
 ### 4. The signing request comes from `swift-certificates`
 
@@ -100,5 +108,5 @@ The repository takes `ci`, `swift_tasks`, `swift_settings`, `swift_release`, `sw
 ## Risks / Trade-offs
 
 1. [The `SecKey` path is not the measured CryptoKit path.] → The probe measures it before the first release.
-2. [A store of a chain that macOS cannot pair with the key yields no `SecIdentity`.] → `store` reads the identity back and fails when it is missing.
+2. [A store of a leaf that macOS cannot pair with the key yields no `SecIdentity`.] → `store` reads the identity back, undoes its writes and fails when it is missing.
 3. [`.macOS(.v27)` needs tools 6.4.] → CI's pinned Xcode 27.2 builds it; a failure there names the platform.

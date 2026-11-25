@@ -42,7 +42,8 @@ It SHALL fail with `alreadyExists` when the group has an identity of that name.
 ### Requirement: The chain is stored so macOS forms a SecIdentity
 
 `store(chain:for:)` SHALL fail with `keyMismatch` when the leaf's public key is not the identity's.
-Otherwise it SHALL replace the identity's chain, and `identity(named:)` SHALL then return the chain and a `SecIdentity`.
+Otherwise it SHALL store the leaf as a certificate item and the whole chain as one keychain item, replacing the identity's previous ones, and `identity(named:)` SHALL then return the chain and a `SecIdentity`.
+It SHALL fail, and leave the previous leaf and chain in place, when macOS forms no `SecIdentity`.
 
 #### Scenario: A wrong leaf
 
@@ -52,11 +53,11 @@ Otherwise it SHALL replace the identity's chain, and `identity(named:)` SHALL th
 #### Scenario: A renewed certificate
 
 - **WHEN** a new chain is stored for an identity that has one
-- **THEN** `identity(named:)` returns the new chain, and no item of the old chain remains
+- **THEN** `identity(named:)` returns the new chain, and the old leaf item and the old chain are gone
 
 ### Requirement: Removal
 
-`remove(name:)` SHALL delete the key and every certificate item of that identity, and fail with `notFound` when there is none.
+`remove(name:)` SHALL delete the key, the leaf certificate item and the chain item of that identity, and fail with `notFound` when there is none.
 
 #### Scenario: Remove, then read
 
