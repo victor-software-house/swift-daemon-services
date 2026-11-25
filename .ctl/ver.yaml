@@ -1,0 +1,7 @@
+# swift-daemon-services's version is the VERSION file.
+# With publisher none, verctl releases it on GitHub only.
+# The Swift package manager reads the version from the tag.
+packages:
+  - name: swift-daemon-services
+    path: VERSION
+    publisher: none
