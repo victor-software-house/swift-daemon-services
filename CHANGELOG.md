@@ -1,5 +1,11 @@
 # Changelog
 
+## swift-daemon-services 0.0.2
+
+### Added
+
+- `IdentityStore.names()` lists the names of the identities in the store's group, sorted ([`4d51574`](https://github.com/victor-software-house/swift-daemon-services/commit/4d51574cbd7bf9f21f187e5f6a9133c2a9d2fdc0)).
+
 ## swift-daemon-services 0.0.1
 
 ### Added
