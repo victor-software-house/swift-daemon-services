@@ -33,8 +33,16 @@ depends = [
   "swift:lint",
   "swift:docs",
   "swift:api",
+  "release:check",
   "check:repo",
 ]
+
+# verctl's release workflow plans only on the default branch. This runs the same
+# served ver task in every CI run, so a release setup it cannot read fails before
+# a merge.
+[tasks."release:check"]
+description = "verctl reads the release config and every pending fragment"
+run = ["mise run --quiet ver check", "mise run --quiet ver status"]
 
 # mise-tasks/ contains this repository's task fragments and file tasks.
 # An includes list replaces the default task dirs, so mise-tasks comes first.
