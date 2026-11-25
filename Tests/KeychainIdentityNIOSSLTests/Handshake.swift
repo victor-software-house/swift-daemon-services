@@ -1,8 +1,10 @@
 import CryptoKit
 import Foundation
+import KeychainIdentityNIOSSL
 import NIOCore
 import NIOPosix
 import NIOSSL
+import NIOTLS
 import Testing
 import X509
 
