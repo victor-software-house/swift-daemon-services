@@ -42,9 +42,13 @@
 
 ## 4. Probe
 
-- [ ] 4.1 `Probe/` with two apps and a shared group, built with XcodeGen.
+- [x] 4.1 `Probe/` with two apps and a shared group, built with XcodeGen.
   Verify: on a locked Mac, the second app signs 200 times with the first app's identity.
   Median, p95 and max go in a dated note.
+  - 2026-11-25 UTC, probe at [`8f23988`][c8f23988] on an M-series Mac, screen locked, signer started by launchd.
+    The maker stored a chain of 2 certificates, and the signing request verified.
+    The signer read the chain, macOS formed the `SecIdentity`, and 200 signatures verified.
+    Median 4.55 ms, p95 4.63 ms, max 6.54 ms.
 
 ## 5. Release
 
@@ -53,3 +57,5 @@
 
 [pr-3]: https://github.com/victor-software-house/swift-daemon-services/pull/3
 [run-3]: https://github.com/victor-software-house/swift-daemon-services/actions/runs/45623036475
+
+[c8f23988]: https://github.com/victor-software-house/swift-daemon-services/commit/8f23988b5cdd53665f5543fd11558873aec19c59

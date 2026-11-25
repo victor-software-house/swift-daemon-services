@@ -4,6 +4,9 @@ name: Release
 # It releases the version commit of a merged Version PR on GitHub (publisher none).
 # It also opens or updates the Version PR.
 # Jobs of this repository's own go below the verctl job.
+#
+# verctl plans only on the default branch.
+# release:check in mise.toml runs the same ver task in CI before a merge.
 on:
   push:
     branches: [main]
