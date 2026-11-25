@@ -1,0 +1,45 @@
+name: Release
+
+# Every push to the default branch runs verctl's release workflow.
+# It releases the version commit of a merged Version PR on GitHub (publisher none).
+# It also opens or updates the Version PR.
+# Jobs of this repository's own go below the verctl job.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+# The jobs this repository adds below read this env.
+# A reusable workflow does not inherit it, so the verctl job sets its own.
+env:
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: init.defaultBranch
+  GIT_CONFIG_VALUE_0: main
+  # The CI profile; local work loads dev from .miserc.toml, which CI never does.
+  MISE_ENV: ci
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verctl:
+    name: verctl
+    uses: victor-software-house/verctl/.github/workflows/release.yml@cef779a4ed2ce4705fd25c6ea17a5454d2522adc # v0.8.5
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    with:
+      publish: ${{ github.event_name == 'push' }}
+      version-pr: ${{ github.event_name == 'push' }}
+      mise-version: 2026.11.12
+      docs: false
+      runner: '["ubuntu-26.04"]'
+    secrets:
+      app-client-id: ${{ secrets.CHANGESET_VERSION_APP_CLIENT_ID }}
+      app-private-key: ${{ secrets.CHANGESET_VERSION_APP_PRIVATE_KEY }}
+      release-mirror-url: ${{ secrets.RELEASE_MIRROR_URL }}
+      release-mirror-ci-key: ${{ secrets.RELEASE_MIRROR_CI_KEY }}

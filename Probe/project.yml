@@ -1,0 +1,48 @@
+# One app creates a Secure Enclave key, and the other app signs with it.
+# No file names the signing team, and Probe/README.md says how to pass it.
+name: Probe
+options:
+  deploymentTarget:
+    macOS: "27.0"
+packages:
+  SwiftDaemonServices:
+    path: ..
+  SwiftCertificates:
+    url: https://github.com/apple/swift-certificates.git
+    from: 1.21.2
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    ARCHS: arm64
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_ENTITLEMENTS: Probe.entitlements
+    ENABLE_HARDENED_RUNTIME: YES
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_LSUIElement: YES
+targets:
+  ProbeMaker:
+    type: application
+    platform: macOS
+    sources:
+      - Maker
+      - Shared
+    dependencies:
+      - package: SwiftDaemonServices
+        product: KeychainIdentity
+      - package: SwiftCertificates
+        product: X509
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.victor-software-house.swift-daemon-services.probe.maker
+  ProbeSigner:
+    type: application
+    platform: macOS
+    sources:
+      - Signer
+      - Shared
+    dependencies:
+      - package: SwiftDaemonServices
+        product: KeychainIdentity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.victor-software-house.swift-daemon-services.probe.signer

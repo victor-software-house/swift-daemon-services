@@ -1,13 +1,17 @@
 # Changes here will be overwritten by Copier; edit with `copier update --data`.
-_commit: v0.0.144
+_commit: v0.0.145
 _src_path: https://github.com/victor-software-house/templates.git
 build_os: macos
+ci_extra_tasks: []
+ci_runner: github-hosted
+ci_secrets: []
 default_branch: main
 generated_paths: []
 github_owner: victor-software-house
 layer: whole
 linux_image: ubuntu-26.04
 macos_image: macos-27
+merge_queue: false
 merge_queue_cancel_lower: true
 pieces:
 - hooks
@@ -17,11 +21,22 @@ pieces:
 - lint_shell
 - lint_prose
 - openspec
+- ci
 - drift_check
-pieces_extra: []
+- swift_tasks
+- swift_settings
+- swift_release
+pieces_extra:
+- swift_format
+- swift_docs
 platforms:
 - linux-x64
 - macos-arm64
 project: swift-package
 prose_fail_level: suggestion
+repository: victor-software-house/swift-daemon-services
 repository_visibility: public
+swift_doc_targets:
+- KeychainIdentity
+- KeychainIdentityNIOSSL
+verify_timeout: 15
